@@ -1,0 +1,133 @@
+image: alpine:latest
+
+stages:
+  - staging
+  - production
+
+staging:
+  stage: staging
+  script:
+  - install_dependencies
+  - ensure_namespace
+  - install_tiller
+  - dry_run
+  - deploy
+  variables:
+    KUBE_NAMESPACE: staging
+    host: $CI_PROJECT_PATH_SLUG-staging.$CI_DNS_ZONE
+  environment:
+    name: staging
+    url: http://$CI_PROJECT_PATH_SLUG-staging.$CI_DNS_ZONE
+  only:
+    - master
+
+production:
+  stage: production
+  script:
+    - install_dependencies
+    - ensure_namespace
+    - install_tiller
+    - dry_run
+    - deploy
+  variables:
+    KUBE_NAMESPACE: production
+    host: $CI_DNS_ZONE
+  when: manual
+  environment:
+    name: production
+    url: http://$CI_DNS_ZONE
+  only:
+    - master
+  except:
+    - pushes
+    - web
+
+.auto_devops: &auto_devops |
+  # Auto DevOps variables and functions
+  [[ "$TRACE" ]] && set -x
+  export CI_APPLICATION_REPOSITORY=$CI_REGISTRY/$CI_PROJECT_PATH
+  export TILLER_NAMESPACE="kube-system"
+  export CI_GITLAB_URL=${HTTP_HTTPS}${CI_GITLAB_FQDN}
+
+  function dry_run() {
+    echo $KUBE_NAMESPACE
+    track="${1-stable}"
+    name="$CI_ENVIRONMENT_SLUG"
+    helm dep build search-engine
+
+    helm upgrade --install \
+      --dry-run \
+      --wait \
+      --set ui.ingress.host="$host" \
+      --set ui.image.registry="$CI_REGISTRY" \
+      --set crawler.image.registry="$CI_REGISTRY" \
+      --set ui.image.tag=$UI_VER \
+      --set crawler.image.tag=$CRAWLER_VER \
+      --set rabbitmq.rabbitmq.username="$CI_RMQ_USER" \
+      --set rabbitmq.rabbitmq.password="$CI_RMQ_PASSWORD" \
+      --set crawler.env.rabbitmq_user="$CI_RMQ_USER" \
+      --set crawler.env.rabbitmq_password="$CI_RMQ_PASSWORD" \
+      --namespace="$KUBE_NAMESPACE" \
+      --version="$CI_PIPELINE_ID-$CI_JOB_ID" \
+      "$name" \
+      search-engine
+  }
+
+  function deploy() {
+    echo $KUBE_NAMESPACE
+    track="${1-stable}"
+    name="$CI_ENVIRONMENT_SLUG"
+    helm dep build search-engine
+
+    helm upgrade --install \
+      --wait \
+      --set ui.ingress.host="$host" \
+      --set ui.image.registry="$CI_REGISTRY" \
+      --set crawler.image.registry="$CI_REGISTRY" \
+      --set ui.image.tag=$UI_VER \
+      --set crawler.image.tag=$CRAWLER_VER \
+      --set rabbitmq.rabbitmq.username="$CI_RMQ_USER" \
+      --set rabbitmq.rabbitmq.password="$CI_RMQ_PASSWORD" \
+      --set crawler.env.rabbitmq_user="$CI_RMQ_USER" \
+      --set crawler.env.rabbitmq_password="$CI_RMQ_PASSWORD" \
+      --namespace="$KUBE_NAMESPACE" \
+      --version="$CI_PIPELINE_ID-$CI_JOB_ID" \
+      "$name" \
+      search-engine
+  }
+
+  function install_dependencies() {
+
+    apk add -U openssl curl tar gzip bash ca-certificates git
+    wget -q -O /etc/apk/keys/sgerrand.rsa.pub https://alpine-pkgs.sgerrand.com/sgerrand.rsa.pub
+    wget https://github.com/sgerrand/alpine-pkg-glibc/releases/download/2.23-r3/glibc-2.23-r3.apk
+    apk add glibc-2.23-r3.apk
+    rm glibc-2.23-r3.apk
+
+    curl https://storage.googleapis.com/kubernetes-helm/helm-v2.12.3-linux-amd64.tar.gz | tar zx
+
+    mv linux-amd64/helm /usr/bin/
+    helm version --client
+
+    curl -L -o /usr/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
+    chmod +x /usr/bin/kubectl
+    kubectl version --client
+  }
+
+  function ensure_namespace() {
+    kubectl describe namespace "$KUBE_NAMESPACE" || kubectl create namespace "$KUBE_NAMESPACE"
+  }
+
+  function install_tiller() {
+    echo "Checking Tiller..."
+    helm init --upgrade
+    kubectl rollout status -n "$TILLER_NAMESPACE" -w "deployment/tiller-deploy"
+    if ! helm version --debug; then
+      echo "Failed to init Tiller."
+      return 1
+    fi
+    echo ""
+  }
+
+before_script:
+  - *auto_devops

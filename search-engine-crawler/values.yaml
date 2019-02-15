@@ -1,0 +1,19 @@
+---
+service:
+  internalPort: 8000
+  externalPort: 8000
+
+image:
+  registry: registry.otus.garbar.pro
+  repository: search-engine
+  name: crawler
+  tag: latest
+
+excluded_urls: .*github.com
+URL: https://vitkhab.github.io/search_engine_test_site/
+databaseHost:
+rabbitMQHost:
+rmq_queue:
+env:
+  rabbitmq_user: user
+  rabbitmq_password: password

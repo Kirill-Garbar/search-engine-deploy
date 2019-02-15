@@ -1,0 +1,16 @@
+---
+service:
+  internalPort: 8000
+  externalPort: 8000
+
+image:
+  registry: registry.otus.garbar.pro
+  repository: search-engine
+  name: ui
+  tag: latest
+
+databaseHost:
+
+ingress:
+  class: nginx
+  host:

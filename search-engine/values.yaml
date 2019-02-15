@@ -1,0 +1,48 @@
+crawler:
+  service:
+    internalPort: 8000
+    externalPort: 8000
+
+  image:
+    registry: registry.otus.garbar.pro
+    repository: search-engine
+    name: crawler
+    tag: master
+
+  excluded_urls: .*github.com
+  databaseHost:
+  rabbitMQHost:
+  rmq_queue:
+
+  env:
+    rabbitmq_user: user
+    rabbitmq_password: password
+
+ui:
+  service:
+    internalPort: 8000
+    externalPort: 8000
+
+  image:
+    registry: registry.otus.garbar.pro
+    repository: search-engine
+    name: ui
+    tag: master
+
+  databaseHost:
+
+  ingress:
+    class: nginx
+    host:
+
+mongodb:
+  usePassword: false
+  metrics:
+    enabled: true
+
+rabbitmq:
+  rabbitmq:
+    username: user
+    password: password
+  metrics:
+    enabled: true

@@ -1,0 +1,11 @@
+# default ssh key
+id_rsa
+appuser
+webprogrammer
+# other
+.vscode/
+.make_vars
+
+# k8s
+requirements.lock
+*.tgz
